@@ -10,10 +10,6 @@ earlier labs:
     4. Association Rule -- recommends the next music tracks for a listening
        Mining              session (Apriori rules)
 
-FIRST VERSION (Member 1): all four models are loaded, and the regression and
-classification endpoints work. Member 2 adds the clustering and recommender
-endpoints.
-
 The models are loaded from the ./model folder ONCE when the server starts.
 Nothing is retrained in this file.
 
@@ -324,6 +320,118 @@ def predict_attrition():
         "class_probabilities": class_probabilities,
         "model": "Logistic Regression (SMOTE used at training only)",
     })
+
+
+# =======================================================================
+# 3. CLUSTERING -- assign a store to a performance segment
+# =======================================================================
+
+# Sample request (cURL):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/store-performance-segmenter/predictions \
+#        -H "Content-Type: application/json" \
+#        -d '{"monthly_revenue_kes": 1200000, "daily_foot_traffic": 400,
+#             "avg_basket_size_kes": 120, "revenue_per_sqm": 5000,
+#             "revenue_per_staff": 140000}'
+@app.route("/api/v1/models/store-performance-segmenter/predictions", methods=["POST"])
+def predict_store_segment():
+    payload = get_json_object()
+
+    # All five features are required, must be numbers and cannot be negative
+    clean = check_fields(
+        payload,
+        number_fields={name: (0, 1_000_000_000) for name in clustering_features},
+        choice_fields={},
+    )
+
+    # Keep the columns in the same order the model was trained with
+    input_row = pd.DataFrame([clean])[clustering_features]
+
+    # The same steps used in training, in the same order:
+    #   fill gaps -> log1p (the scaler was fitted on log values) -> scale -> K-Means
+    filled = clustering_imputer.transform(input_row)
+    logged = np.log1p(filled)
+    scaled = clustering_scaler.transform(logged)
+    assigned_cluster = int(clustering_kmeans.predict(scaled)[0])
+
+    return jsonify({
+        "assigned_cluster": assigned_cluster,
+        "model": f"K-Means (k={clustering_kmeans.n_clusters}, log-transformed and standardized features)",
+    })
+
+
+# =======================================================================
+# 4. ASSOCIATION RULE MINING -- recommend the next tracks for a session
+# =======================================================================
+
+# Sample requests (cURL):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/music-session-recommender/predictions \
+#        -H "Content-Type: application/json" \
+#        -d '{"session_tracks": ["M09", "M10"]}'
+#
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/music-session-recommender/predictions \
+#        -H "Content-Type: application/json" \
+#        -d '{"session_tracks": ["M09", "M10"], "top_n": 2}'
+@app.route("/api/v1/models/music-session-recommender/predictions", methods=["POST"])
+def recommend_tracks():
+    payload = get_json_object()
+
+    # Step 1: "session_tracks" must be present
+    if "session_tracks" not in payload:
+        raise ValidationError("Missing required field(s): session_tracks")
+
+    # Step 2: it must be a non-empty list of text track ids
+    tracks = payload["session_tracks"]
+    if not isinstance(tracks, list) or len(tracks) == 0:
+        raise ValidationError(
+            "'session_tracks' must be a non-empty list of track ids, e.g. [\"M09\", \"M10\"]."
+        )
+    if not all(isinstance(item, str) for item in tracks):
+        raise ValidationError("Every item in 'session_tracks' must be text, such as \"M09\".")
+
+    # Step 3: every track id must exist in our track catalogue
+    # (we ignore spaces and capital/small letters, so " m09 " becomes "M09")
+    session = {item.strip().upper() for item in tracks}
+    unknown = sorted(t for t in session if t not in track_lookup.index)
+    if unknown:
+        raise ValidationError(f"Unknown track id(s): {', '.join(unknown)}")
+
+    # Step 4: "top_n" is optional (default 3). It must be a whole number 1-10.
+    top_n = payload.get("top_n", 3)
+    if not isinstance(top_n, int) or isinstance(top_n, bool) or not 1 <= top_n <= 10:
+        raise ValidationError("'top_n' must be a whole number between 1 and 10.")
+
+    # Step 5: the input is valid, so use the saved rules.
+    # A rule applies when ALL its antecedent tracks are already in the session.
+    # For each recommended track we keep its best confidence.
+    candidates = {}
+    for antecedent, consequent_list in recommendation_lookup.items():
+        if antecedent.issubset(session):
+            for track_id, confidence, lift in consequent_list:
+                if track_id not in session:
+                    if track_id not in candidates or confidence > candidates[track_id][0]:
+                        candidates[track_id] = (confidence, lift)
+
+    # Rank by confidence (highest first) and keep the top_n
+    ranked = sorted(candidates.items(), key=lambda item: item[1][0], reverse=True)[:top_n]
+    recommendations = [
+        {
+            "track_id": str(track_id),
+            "item_name": track_lookup.loc[track_id, "item_name"],
+            "category": track_lookup.loc[track_id, "category"],
+            "confidence": round(float(confidence), 3),
+            "lift": round(float(lift), 2),
+        }
+        for track_id, (confidence, lift) in ranked
+    ]
+
+    response = {
+        "session_tracks": sorted(session),
+        "recommendations": recommendations,
+        "model": "Apriori association rules (cleaned, precomputed lookup)",
+    }
+    if not recommendations:
+        response["message"] = "No rule matches this session, so there is no recommendation."
+    return jsonify(response)
 
 
 # =======================================================================
