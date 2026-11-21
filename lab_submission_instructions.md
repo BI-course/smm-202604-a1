@@ -2,7 +2,7 @@
 
 ## Student Details and Individual Member Contributions
 
-**Name of the team on GitHub Classroom:**
+**Name of the team on GitHub Classroom: 202604-A1**
 
 **Member 1:**
 
@@ -46,7 +46,7 @@
 
 ## Chosen Level of Difficulty
 
-**Specify the chosen level of difficulty** (baseline, intermediate, or advanced):
+**Specify the chosen level of difficulty** (baseline, intermediate, or advanced): Advanced
 
 ## Video Demonstration
 
@@ -74,8 +74,8 @@ Fill in only the rows that apply to your chosen difficulty level (see Part C bel
 |                                                   | https://smm-202604-a1.onrender.com/api/v1/models/employee-attrition-classifier/predictions                                                                                                                                                                                                                                                                 |
 |                                                   | https://smm-202604-a1.onrender.com/api/v1/models/store-performance-segmenter/predictions                                                                                                                                                                                                                                                                   |
 |                                                   | https://smm-202604-a1.onrender.com/api/v1/models/music-session-recommender/predictions                                                                                                                                                                                                                                                                     |
-| Hugging Face Space (Gradio, one tab per model)    |                                                                                                                                                                                                                                                                                                                                                            |
-| Streamlit Community Cloud app (one tab per model) |                                                                                                                                                                                                                                                                                                                                                            |
+| Hugging Face Space (Gradio, one tab per model)    | https://huggingface.co/spaces/Fluffycoal/smm-202604-a1                                                                                                                                                                                                                                                                                                                                                          |
+| Streamlit Community Cloud app (one tab per model) | https://smm-202604-a1-utjhsru446frjcpftbaer2.streamlit.app/                                                                                                                                                                                                                                                                                                                                                           |
 
 ---
 

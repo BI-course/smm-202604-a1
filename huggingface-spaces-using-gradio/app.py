@@ -1,224 +1,236 @@
+"""
+app.py  --  Gradio app for Hugging Face Spaces
+
+One app with FOUR tabs, one tab per model:
+    1. Rental price      (regression)
+    2. Employee attrition (classification)
+    3. Store segment     (clustering)
+    4. Music recommender (association rules)
+
+The models are loaded from the same .joblib files that api.py uses.
+All the loading, input checking and predicting is done in model_service.py,
+so this file only builds the screen.
+
+Run locally:   python app.py        (then open http://127.0.0.1:7860)
+"""
+
 import gradio as gr
-import joblib
-import numpy as np
-import pandas as pd
-import spaces
+
+import model_service as ms
 
 # -----------------------------------------------------------------------
-# Hugging Face's free tier now provisions new Gradio Spaces on ZeroGPU
-# hardware only (see the note in Step 2 below). None of this app's four
-# models needs a GPU -- every prediction below runs on plain scikit-learn
-# arrays -- but some free-tier Spaces fail to start reliably unless at
-# least one function is decorated with @spaces.GPU. This function does
-# nothing GPU-related; it exists only to satisfy that platform check.
-# Calling it once, here, registers it before Gradio launches below.
-@spaces.GPU
-def _warm_zerogpu():
-    return None
-
-_warm_zerogpu()
-
+# Hugging Face's free ZeroGPU hardware expects at least one function marked
+# with @spaces.GPU. Our models do NOT use a GPU, so this function does
+# nothing. It only stops the "No @spaces.GPU function detected" start-up
+# message. On a normal computer the 'spaces' package is not installed, so
+# the try/except simply skips this part.
 # -----------------------------------------------------------------------
-# Load all four persisted artifacts ONCE, at import time -- the same
-# principle api.py uses: load once at startup, reuse across every request
-# (here, across every tab and every submit click), never inside a function.
-# -----------------------------------------------------------------------
-regression_pipeline = joblib.load("lasso_regressor_for_sme_revenue.joblib")
-classification_pipeline = joblib.load("svc_classifier_for_sme_credit_risk.joblib")
+try:
+    import spaces
 
-clustering_artifact = joblib.load("kmeans_mall_customer_segmentation.joblib")
-clustering_scaler = clustering_artifact["scaler"]
-clustering_kmeans = clustering_artifact["kmeans"]
+    @spaces.GPU
+    def _warm_zerogpu():
+        return None
 
-arm_artifact = joblib.load("apriori_recommendation_rules.joblib")
-recommendation_lookup = arm_artifact["recommendation_lookup"]
-sku_lookup = arm_artifact["sku_lookup"]
+    _warm_zerogpu()
+except ImportError:
+    pass
+
+# Load the models once, when the app starts (not on every click)
+ms.load_models()
 
 
 # -----------------------------------------------------------------------
-# 1. Regression -- predict monthly revenue (KES) for an SME
+# Small helpers that turn results into text (Markdown) for the screen
 # -----------------------------------------------------------------------
-def predict_revenue(sector, county, quarter, business_age_years, num_employees,
-                     owner_education_level, monthly_marketing_spend_kes,
-                     avg_daily_foot_traffic, online_presence_score,
-                     loan_amount_kes, interest_rate_pct, inflation_rate_pct,
-                     competitor_density, customer_satisfaction_score):
-    payload = {
-        "sector": sector, "county": county, "quarter": quarter,
-        "business_age_years": business_age_years, "num_employees": num_employees,
-        "owner_education_level": owner_education_level,
-        "monthly_marketing_spend_kes": monthly_marketing_spend_kes,
-        # A Gradio Number field cannot submit a literal null; 0 is used here
-        # as a stand-in for "not applicable" when the field is left blank.
-        "avg_daily_foot_traffic": avg_daily_foot_traffic or None,
-        "online_presence_score": online_presence_score,
-        "loan_amount_kes": loan_amount_kes, "interest_rate_pct": interest_rate_pct,
-        "inflation_rate_pct": inflation_rate_pct,
-        "competitor_density": competitor_density,
-        "customer_satisfaction_score": customer_satisfaction_score,
-    }
-    input_row = pd.DataFrame([payload])
-    predicted_log_revenue = regression_pipeline.predict(input_row)[0]
-    predicted_revenue_kes = float(np.expm1(predicted_log_revenue))
-    return f"KES {predicted_revenue_kes:,.2f} / month"
+def problem(message):
+    """What the user sees when the input is wrong."""
+    return f"**Check your input:** {message}"
 
 
-# -----------------------------------------------------------------------
-# 2. Classification -- predict SME credit risk category
-# -----------------------------------------------------------------------
-def predict_credit_risk(sector, county, quarter, loan_purpose, owner_education_level,
-                         business_age_years, num_employees, monthly_revenue_kes,
-                         loan_amount_kes, loan_term_months, interest_rate_pct,
-                         collateral_value_kes, debt_to_income_ratio, credit_score,
-                         num_previous_loans, missed_payments_count,
-                         online_presence_score, customer_satisfaction_score,
-                         competitor_density):
-    payload = {
-        "sector": sector, "county": county, "quarter": quarter,
-        "loan_purpose": loan_purpose, "owner_education_level": owner_education_level,
-        "business_age_years": business_age_years, "num_employees": num_employees,
-        "monthly_revenue_kes": monthly_revenue_kes, "loan_amount_kes": loan_amount_kes,
-        "loan_term_months": loan_term_months, "interest_rate_pct": interest_rate_pct,
-        "collateral_value_kes": collateral_value_kes or None,
-        "debt_to_income_ratio": debt_to_income_ratio, "credit_score": credit_score,
-        "num_previous_loans": num_previous_loans,
-        "missed_payments_count": missed_payments_count,
-        "online_presence_score": online_presence_score,
-        "customer_satisfaction_score": customer_satisfaction_score,
-        "competitor_density": competitor_density,
-    }
-    input_row = pd.DataFrame([payload])
-    predicted_class = classification_pipeline.predict(input_row)[0]
-    predicted_probabilities = classification_pipeline.predict_proba(input_row)[0]
-    class_labels = classification_pipeline.named_steps["model"].classes_
-    probability_lines = "\n".join(
-        f"  {label}: {prob:.1%}" for label, prob in zip(class_labels, predicted_probabilities)
-    )
-    return f"Predicted category: {predicted_class}\n\n{probability_lines}"
-
-
-# -----------------------------------------------------------------------
-# 3. Clustering -- assign a new mall customer to an existing segment
-# -----------------------------------------------------------------------
-def predict_segment(age, annual_income_k, spending_score):
-    input_row = pd.DataFrame([{
-        "Age": age,
-        "Annual Income (k$)": annual_income_k,
-        "Spending Score (1-100)": spending_score,
-    }])
-    scaled_input = clustering_scaler.transform(input_row)
-    cluster = int(clustering_kmeans.predict(scaled_input)[0])
-    return f"Assigned segment: Cluster {cluster}"
-
-
-# -----------------------------------------------------------------------
-# 4. Association Rule Mining -- recommend products for a shopping cart
-# -----------------------------------------------------------------------
-def recommend_products(cart_text, top_n):
-    cart = {sku.strip() for sku in cart_text.split(",") if sku.strip()}
-    candidates = {}
-    for antecedent, consequent_list in recommendation_lookup.items():
-        if antecedent.issubset(cart):
-            for sku, confidence, lift in consequent_list:
-                if sku not in cart:
-                    if sku not in candidates or confidence > candidates[sku][0]:
-                        candidates[sku] = (confidence, lift)
-
-    ranked = sorted(candidates.items(), key=lambda item: item[1][0], reverse=True)[:int(top_n)]
-    if not ranked:
-        return "No recommendations for this cart -- try a SKU combination seen in the training orders."
-
-    lines = [
-        f"{sku_lookup.loc[sku, 'product_name']} ({sku})  --  "
-        f"confidence {confidence:.1%}, lift {lift:.2f}"
-        for sku, (confidence, lift) in ranked
-    ]
+def markdown_table(headers, rows):
+    lines = ["| " + " | ".join(headers) + " |",
+             "|" + "|".join(["---"] * len(headers)) + "|"]
+    for row in rows:
+        lines.append("| " + " | ".join(str(cell) for cell in row) + " |")
     return "\n".join(lines)
 
 
 # -----------------------------------------------------------------------
-# One gr.Blocks() app, four gr.Tab()s -- one shared Space URL, no linking
-# between separately-hosted demos required.
+# 1. Regression: rental price
 # -----------------------------------------------------------------------
-with gr.Blocks(title="BBT 4206 Model Validation Demos") as demo:
-    gr.Markdown("# BBT 4206 -- Model Validation Demos\nSwitch tabs to try a different model.")
+RENT_FIELDS = [
+    "property_age_years", "size_sqm", "num_bedrooms", "num_bathrooms",
+    "distance_to_cbd_km", "service_charge_kes", "garage_size_sqm",
+    "property_type", "neighborhood", "furnishing_status",
+]
 
-    with gr.Tab("SME Revenue Regressor"):
-        gr.Interface(
-            fn=predict_revenue,
-            inputs=[
-                gr.Textbox(label="Sector", value="Technology"),
-                gr.Textbox(label="County", value="Nairobi"),
-                gr.Textbox(label="Quarter", value="Q3"),
-                gr.Number(label="Business Age (years)", value=4.5),
-                gr.Number(label="Number of Employees", value=12),
-                # These four categories are the exact set the pipeline's
-                # OrdinalEncoder was fitted on -- any other string raises
-                # "Found unknown categories" at predict time.
-                gr.Dropdown(label="Owner Education Level",
-                            choices=["Primary", "Secondary", "Tertiary", "Postgraduate"],
-                            value="Secondary"),
-                gr.Number(label="Monthly Marketing Spend (KES)", value=45000),
-                gr.Number(label="Avg Daily Foot Traffic (leave 0 if not applicable)", value=0),
-                gr.Number(label="Online Presence Score", value=78.0),
-                gr.Number(label="Loan Amount (KES)", value=250000),
-                gr.Number(label="Interest Rate (%)", value=14.5),
-                gr.Number(label="Inflation Rate (%)", value=6.5),
-                gr.Number(label="Competitor Density", value=5),
-                gr.Number(label="Customer Satisfaction Score", value=4.2),
-            ],
-            outputs=gr.Textbox(label="Predicted Monthly Revenue"),
-        )
 
-    with gr.Tab("SME Credit Risk Classifier"):
-        gr.Interface(
-            fn=predict_credit_risk,
-            inputs=[
-                gr.Textbox(label="Sector", value="Retail"),
-                gr.Textbox(label="County", value="Nairobi"),
-                gr.Textbox(label="Quarter", value="Q2"),
-                gr.Textbox(label="Loan Purpose", value="Working Capital"),
-                gr.Dropdown(label="Owner Education Level",
-                            choices=["Primary", "Secondary", "Tertiary", "Postgraduate"],
-                            value="Secondary"),
-                gr.Number(label="Business Age (years)", value=2.1),
-                gr.Number(label="Number of Employees", value=4),
-                gr.Number(label="Monthly Revenue (KES)", value=850000),
-                gr.Number(label="Loan Amount (KES)", value=150000),
-                gr.Number(label="Loan Term (months)", value=12),
-                gr.Number(label="Interest Rate (%)", value=16.5),
-                gr.Number(label="Collateral Value (leave 0 if unsecured)", value=0),
-                gr.Number(label="Debt-to-Income Ratio", value=0.62),
-                gr.Number(label="Credit Score", value=590),
-                gr.Number(label="Number of Previous Loans", value=1),
-                gr.Number(label="Missed Payments Count", value=3),
-                gr.Number(label="Online Presence Score", value=40.0),
-                gr.Number(label="Customer Satisfaction Score", value=3.4),
-                gr.Number(label="Competitor Density", value=6),
-            ],
-            outputs=gr.Textbox(label="Predicted Credit Risk Category"),
-        )
+def run_rent(*values):
+    try:
+        result = ms.predict_rental_price(dict(zip(RENT_FIELDS, values)))
+    except ms.InputError as error:
+        return problem(error)
+    return (f"### Predicted rent: KES {result['predicted_rental_price_kes']:,.0f} per month\n\n"
+            f"Model: {result['model']}")
 
-    with gr.Tab("Mall Customer Segmenter"):
-        gr.Interface(
-            fn=predict_segment,
-            inputs=[
-                gr.Number(label="Age", value=27),
-                gr.Number(label="Annual Income (k$)", value=45),
-                gr.Number(label="Spending Score (1-100)", value=72),
-            ],
-            outputs=gr.Textbox(label="Prediction"),
-        )
 
-    with gr.Tab("E-commerce Recommender"):
-        gr.Interface(
-            fn=recommend_products,
-            inputs=[
-                gr.Textbox(label="Cart (comma-separated SKUs)", value="H06, H07"),
-                gr.Number(label="Top N Recommendations", value=3),
-            ],
-            outputs=gr.Textbox(label="Recommendations"),
-        )
+# -----------------------------------------------------------------------
+# 2. Classification: employee attrition
+# -----------------------------------------------------------------------
+ATTRITION_FIELDS = [
+    "department", "job_role_level", "education_level", "performance_rating",
+    "years_at_company", "years_since_last_promotion", "monthly_salary_kes",
+    "overtime_hours_per_month", "job_satisfaction_score", "work_life_balance_score",
+    "distance_from_home_km", "num_companies_worked_previously",
+    "remote_work_days_per_week", "bonus_amount_kes",
+]
+
+
+def run_attrition(*values):
+    try:
+        result = ms.predict_attrition(dict(zip(ATTRITION_FIELDS, values)))
+    except ms.InputError as error:
+        return problem(error)
+    leaving = "Yes" if result["predicted_attrition"] == "Yes" else "No"
+    rows = [(label, f"{prob:.1%}") for label, prob in result["class_probabilities"].items()]
+    return (f"### Likely to leave the company: {leaving}\n\n"
+            + markdown_table(["Leaves the company?", "Probability"], rows)
+            + f"\n\nModel: {result['model']}")
+
+
+# -----------------------------------------------------------------------
+# 3. Clustering: store segment
+# -----------------------------------------------------------------------
+def run_store(*values):
+    try:
+        result = ms.predict_store_segment(dict(zip(ms.STORE_FIELDS, values)))
+    except ms.InputError as error:
+        return problem(error)
+
+    # A table of all five clusters, with the assigned one marked
+    rows = []
+    for p in ms.cluster_profiles():
+        mark = "**assigned**" if p["cluster"] == result["assigned_cluster"] else ""
+        rows.append((p["cluster"], p["name"], p["stores_in_training_data"],
+                     f"{p['monthly_revenue_kes']:,.0f}", f"{p['daily_foot_traffic']:,.0f}",
+                     f"{p['avg_basket_size_kes']:,.0f}", mark))
+    return (f"### Cluster {result['assigned_cluster']}: {result['segment_name']}\n\n"
+            "Typical store in each cluster (worked out from the K-Means cluster centres):\n\n"
+            + markdown_table(
+                ["Cluster", "Name", "Stores", "Monthly revenue (KES)",
+                 "Daily foot traffic", "Basket size (KES)", ""], rows)
+            + f"\n\nModel: {result['model']}")
+
+
+# -----------------------------------------------------------------------
+# 4. Association rules: music recommender
+# -----------------------------------------------------------------------
+def run_music(tracks, top_n):
+    try:
+        result = ms.recommend_tracks(tracks, top_n)
+    except ms.InputError as error:
+        return problem(error)
+    if not result["recommendations"]:
+        return ("### No recommendation\n\nNo saved rule matches these tracks. "
+                "Try a pair that is often played together, such as M09 + M10.")
+    rows = [(r["track_id"], r["item_name"], r["category"],
+             f"{r['confidence']:.1%}", r["lift"]) for r in result["recommendations"]]
+    return ("### Play next\n\n"
+            + markdown_table(["Track", "Name", "Genre", "Confidence", "Lift"], rows)
+            + f"\n\nModel: {result['model']}")
+
+
+# -----------------------------------------------------------------------
+# The screen: one gr.Blocks app with four tabs
+# -----------------------------------------------------------------------
+with gr.Blocks(title="Group A: Model validation demos") as demo:
+    gr.Markdown("# Group A: model validation demos\n"
+                "Choose a tab, change the values if you like, and press the button. "
+                "The four models are the same saved files that our API uses.")
+
+    # ---------------- Tab 1: rent ----------------
+    with gr.Tab("Rental price"):
+        with gr.Row():
+            with gr.Column():
+                rent_age = gr.Number(label="Property age (years)", value=5, minimum=0, maximum=150)
+                rent_size = gr.Number(label="Size (square metres)", value=90, minimum=1, maximum=5000)
+                rent_beds = gr.Number(label="Bedrooms", value=2, minimum=0, maximum=20)
+                rent_baths = gr.Number(label="Bathrooms", value=2, minimum=0, maximum=20)
+                rent_cbd = gr.Number(label="Distance to the city centre (km)", value=6, minimum=0, maximum=200)
+            with gr.Column():
+                rent_service = gr.Number(label="Service charge (KES per month)", value=8000,
+                                         minimum=0, maximum=10_000_000)
+                rent_garage = gr.Number(label="Garage size (square metres), leave empty if none",
+                                        value=None, minimum=0, maximum=1000)
+                rent_type = gr.Dropdown(label="Property type", choices=ms.PROPERTY_TYPES, value="Apartment")
+                rent_area = gr.Dropdown(label="Neighbourhood", choices=ms.NEIGHBORHOODS, value="Kilimani")
+                rent_furnish = gr.Dropdown(label="Furnishing", choices=ms.FURNISHING_STATUSES,
+                                           value="Semi-Furnished")
+        rent_button = gr.Button("Predict rent", variant="primary")
+        rent_output = gr.Markdown()
+        rent_button.click(
+            run_rent,
+            [rent_age, rent_size, rent_beds, rent_baths, rent_cbd, rent_service, rent_garage,
+             rent_type, rent_area, rent_furnish],
+            rent_output, api_name="rental_price")
+
+    # ---------------- Tab 2: attrition ----------------
+    with gr.Tab("Employee attrition"):
+        with gr.Row():
+            with gr.Column():
+                att_dept = gr.Dropdown(label="Department", choices=ms.DEPARTMENTS, value="Sales")
+                att_level = gr.Dropdown(label="Job level", choices=ms.JOB_ROLE_LEVELS, value="Mid")
+                att_edu = gr.Dropdown(label="Education", choices=ms.EDUCATION_LEVELS, value="Bachelor's")
+                att_perf = gr.Dropdown(label="Performance rating", choices=ms.PERFORMANCE_RATINGS,
+                                       value="Average")
+                att_years = gr.Number(label="Years at the company", value=3, minimum=0, maximum=60)
+                att_promo = gr.Number(label="Years since last promotion", value=2, minimum=0, maximum=60)
+                att_salary = gr.Number(label="Monthly salary (KES)", value=85000,
+                                       minimum=0, maximum=10_000_000)
+            with gr.Column():
+                att_overtime = gr.Number(label="Overtime hours per month", value=20, minimum=0, maximum=300)
+                att_sat = gr.Number(label="Job satisfaction (1 to 5)", value=3, minimum=1, maximum=5)
+                att_wlb = gr.Number(label="Work-life balance (1 to 5)", value=3, minimum=1, maximum=5)
+                att_dist = gr.Number(label="Distance from home (km)", value=12, minimum=0, maximum=500)
+                att_prev = gr.Number(label="Companies worked for before", value=2, minimum=0, maximum=30)
+                att_remote = gr.Number(label="Remote work days per week", value=1, minimum=0, maximum=7)
+                att_bonus = gr.Number(label="Bonus (KES), leave empty if none", value=None,
+                                      minimum=0, maximum=100_000_000)
+        att_button = gr.Button("Predict attrition", variant="primary")
+        att_output = gr.Markdown()
+        att_button.click(
+            run_attrition,
+            [att_dept, att_level, att_edu, att_perf, att_years, att_promo, att_salary,
+             att_overtime, att_sat, att_wlb, att_dist, att_prev, att_remote, att_bonus],
+            att_output, api_name="employee_attrition")
+
+    # ---------------- Tab 3: store segment ----------------
+    with gr.Tab("Store segment"):
+        store_revenue = gr.Number(label="Monthly revenue (KES)", value=1200000, minimum=0)
+        store_traffic = gr.Number(label="Daily foot traffic (shoppers)", value=400, minimum=0)
+        store_basket = gr.Number(label="Average basket size (KES)", value=120, minimum=0)
+        store_sqm = gr.Number(label="Revenue per square metre (KES)", value=5000, minimum=0)
+        store_staff = gr.Number(label="Revenue per staff member (KES)", value=140000, minimum=0)
+        store_button = gr.Button("Find the segment", variant="primary")
+        store_output = gr.Markdown()
+        store_button.click(
+            run_store,
+            [store_revenue, store_traffic, store_basket, store_sqm, store_staff],
+            store_output, api_name="store_segment")
+
+    # ---------------- Tab 4: music recommender ----------------
+    with gr.Tab("Music recommender"):
+        gr.Markdown("Tick the tracks already played in the listening session. "
+                    "Try M09 + M10, or M01 + M03, or M13 + M15.")
+        music_tracks = gr.CheckboxGroup(label="Tracks played so far",
+                                        choices=ms.track_choices(), value=["M09", "M10"])
+        music_top = gr.Slider(label="How many tracks to recommend", minimum=1, maximum=10,
+                              step=1, value=3)
+        music_button = gr.Button("Recommend next tracks", variant="primary")
+        music_output = gr.Markdown()
+        music_button.click(run_music, [music_tracks, music_top], music_output,
+                           api_name="music_recommender")
 
 if __name__ == "__main__":
     demo.launch()
