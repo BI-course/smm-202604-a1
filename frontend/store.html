@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Store segment | Group A model demos</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="t-store">
+  <header class="site-header">
+    <a class="brand" href="index.html">Group A model demos</a>
+    <nav class="site-nav" aria-label="Pages">
+      <a href="index.html">Home</a>
+      <a href="rental.html">Rental price</a>
+      <a href="attrition.html">Employee attrition</a>
+      <a href="store.html" aria-current="page">Store segment</a>
+      <a href="music.html">Music recommender</a>
+    </nav>
+    <span id="api-status" class="api-status" role="status">Checking the API...</span>
+  </header>
+  <main>
+    <h1>Store segment</h1>
+    <p class="lead">Enter a store's numbers and the K-Means model places it in one of five performance segments.</p>
+    <div class="layout">
+      <form id="model-form" novalidate>
+      <fieldset>
+        <legend>Store figures</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="monthly_revenue_kes">Monthly revenue (KES)</label>
+          <input type="number" id="monthly_revenue_kes" name="monthly_revenue_kes" min="0" max="1000000000" step="any" value="1200000">
+        </div>
+        <div class="field">
+          <label for="daily_foot_traffic">Daily foot traffic (shoppers)</label>
+          <input type="number" id="daily_foot_traffic" name="daily_foot_traffic" min="0" max="1000000000" step="any" value="400">
+        </div>
+        <div class="field">
+          <label for="avg_basket_size_kes">Average basket size (KES)</label>
+          <input type="number" id="avg_basket_size_kes" name="avg_basket_size_kes" min="0" max="1000000000" step="any" value="120">
+        </div>
+        <div class="field">
+          <label for="revenue_per_sqm">Revenue per square metre (KES)</label>
+          <input type="number" id="revenue_per_sqm" name="revenue_per_sqm" min="0" max="1000000000" step="any" value="5000">
+        </div>
+        <div class="field">
+          <label for="revenue_per_staff">Revenue per staff member (KES)</label>
+          <input type="number" id="revenue_per_staff" name="revenue_per_staff" min="0" max="1000000000" step="any" value="140000">
+        </div>
+        </div>
+      </fieldset>
+      <div class="actions">
+          <button type="submit">Find the segment</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+      <section class="result-panel" id="result-panel" aria-live="polite" aria-label="Result">
+        <p class="result-empty">Your answer will appear here.</p>
+      </section>
+    </div>
+  </main>
+  <script src="js/common.js"></script>
+  <script src="js/store.js"></script>
+</body>
+</html>

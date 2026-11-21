@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee attrition | Group A model demos</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="t-attrition">
+  <header class="site-header">
+    <a class="brand" href="index.html">Group A model demos</a>
+    <nav class="site-nav" aria-label="Pages">
+      <a href="index.html">Home</a>
+      <a href="rental.html">Rental price</a>
+      <a href="attrition.html" aria-current="page">Employee attrition</a>
+      <a href="store.html">Store segment</a>
+      <a href="music.html">Music recommender</a>
+    </nav>
+    <span id="api-status" class="api-status" role="status">Checking the API...</span>
+  </header>
+  <main>
+    <h1>Employee attrition</h1>
+    <p class="lead">Enter an employee's details and the classifier says whether they are likely to leave, and how likely.</p>
+    <div class="layout">
+      <form id="model-form" novalidate>
+      <fieldset>
+        <legend>Role</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="department">Department</label>
+          <select id="department" name="department">
+            <option>Engineering</option>
+            <option>Finance</option>
+            <option>HR</option>
+            <option>Operations</option>
+            <option selected>Sales</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="job_role_level">Job level</label>
+          <select id="job_role_level" name="job_role_level">
+            <option>Junior</option>
+            <option selected>Mid</option>
+            <option>Senior</option>
+            <option>Lead</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="education_level">Education</label>
+          <select id="education_level" name="education_level">
+            <option>Diploma</option>
+            <option selected>Bachelor's</option>
+            <option>Master's</option>
+            <option>PhD</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="performance_rating">Performance rating</label>
+          <select id="performance_rating" name="performance_rating">
+            <option>Low</option>
+            <option selected>Average</option>
+            <option>High</option>
+            <option>Outstanding</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="years_at_company">Years at the company</label>
+          <input type="number" id="years_at_company" name="years_at_company" min="0" max="60" step="any" value="3">
+        </div>
+        <div class="field">
+          <label for="years_since_last_promotion">Years since last promotion</label>
+          <input type="number" id="years_since_last_promotion" name="years_since_last_promotion" min="0" max="60" step="any" value="2">
+        </div>
+        <div class="field">
+          <label for="num_companies_worked_previously">Companies worked for before</label>
+          <input type="number" id="num_companies_worked_previously" name="num_companies_worked_previously" min="0" max="30" step="1" value="2">
+        </div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Pay and workload</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="monthly_salary_kes">Monthly salary (KES)</label>
+          <input type="number" id="monthly_salary_kes" name="monthly_salary_kes" min="0" max="10000000" step="any" value="85000">
+        </div>
+        <div class="field">
+          <label for="bonus_amount_kes">Bonus (KES)</label>
+          <input type="number" id="bonus_amount_kes" name="bonus_amount_kes" min="0" max="100000000" step="any" value="" data-optional="true">
+          <span class="hint">Leave empty if there is no bonus.</span>
+        </div>
+        <div class="field">
+          <label for="overtime_hours_per_month">Overtime hours per month</label>
+          <input type="number" id="overtime_hours_per_month" name="overtime_hours_per_month" min="0" max="300" step="any" value="20">
+        </div>
+        <div class="field">
+          <label for="distance_from_home_km">Distance from home (km)</label>
+          <input type="number" id="distance_from_home_km" name="distance_from_home_km" min="0" max="500" step="any" value="12">
+        </div>
+        <div class="field">
+          <label for="remote_work_days_per_week">Remote work days per week</label>
+          <input type="number" id="remote_work_days_per_week" name="remote_work_days_per_week" min="0" max="7" step="1" value="1">
+        </div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Happiness (1 = low, 5 = high)</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="job_satisfaction_score">Job satisfaction</label>
+          <input type="number" id="job_satisfaction_score" name="job_satisfaction_score" min="1" max="5" step="0.5" value="3">
+        </div>
+        <div class="field">
+          <label for="work_life_balance_score">Work-life balance</label>
+          <input type="number" id="work_life_balance_score" name="work_life_balance_score" min="1" max="5" step="0.5" value="3">
+        </div>
+        </div>
+      </fieldset>
+      <div class="actions">
+          <button type="submit">Predict attrition</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+      <section class="result-panel" id="result-panel" aria-live="polite" aria-label="Result">
+        <p class="result-empty">Your answer will appear here.</p>
+      </section>
+    </div>
+  </main>
+  <script src="js/common.js"></script>
+  <script src="js/attrition.js"></script>
+</body>
+</html>
