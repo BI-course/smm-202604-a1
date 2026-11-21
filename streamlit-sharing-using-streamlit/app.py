@@ -1,194 +1,205 @@
-import streamlit as st
-import joblib
-import numpy as np
+"""
+app.py  --  Streamlit app for Streamlit Community Cloud
+
+One app with FOUR tabs, one tab per model:
+    1. Rental price       (regression)
+    2. Employee attrition (classification)
+    3. Store segment      (clustering)
+    4. Music recommender  (association rules)
+
+The models are loaded from the same .joblib files that api.py uses.
+All the loading, input checking and predicting is done in model_service.py,
+so this file only builds the screen.
+
+Run locally from the ROOT of the repository (not from inside this folder):
+    streamlit run streamlit-sharing-using-streamlit/app.py
+"""
+
 import pandas as pd
-import os
+import streamlit as st
+
+import model_service as ms
+
+st.set_page_config(page_title="Group A: model validation demos", layout="wide")
+
+
+# Streamlit runs this whole file again on every click. Python only imports
+# model_service once, and load_models() remembers its result, so the four model
+# files are read from disk only the first time. This line just makes that first
+# read happen now, behind a spinner.
+@st.cache_resource(show_spinner="Loading the four saved models...")
+def get_models():
+    return ms.load_models()
+
+
+get_models()
+
+st.title("Group A: model validation demos")
+st.write("Choose a tab, change the values if you like, and press the button. "
+         "The four models are the same saved files that our API uses.")
+
+tab_rent, tab_attrition, tab_store, tab_music = st.tabs(
+    ["Rental price", "Employee attrition", "Store segment", "Music recommender"])
+
+
+def optional_number(label, key, minimum, maximum):
+    """A number box that can be left empty (the saved pipeline fills it in)."""
+    return st.number_input(label, min_value=float(minimum), max_value=float(maximum),
+                           value=None, step=1.0, key=key)
+
 
 # -----------------------------------------------------------------------
-# Load all four persisted artifacts ONCE, at module import time. Streamlit
-# re-runs this whole script top-to-bottom on every widget interaction, so
-# @st.cache_resource keeps joblib.load() from re-reading the files from
-# disk on every single click -- without it, every tab switch and every
-# form submission would reload all four artifacts again.
+# 1. Regression: rental price
 # -----------------------------------------------------------------------
-@st.cache_resource
-def load_artifacts():
-    # regression_pipeline = joblib.load("lasso_regressor_for_sme_revenue.joblib")
-    # classification_pipeline = joblib.load("svc_classifier_for_sme_credit_risk.joblib")
-    # clustering_artifact = joblib.load("kmeans_mall_customer_segmentation.joblib")
-    # arm_artifact = joblib.load("apriori_recommendation_rules.joblib")
-    MODEL_DIR = "./model"
+with tab_rent:
+    with st.form("rent_form"):
+        left, right = st.columns(2)
+        with left:
+            age = st.number_input("Property age (years)", 0.0, 150.0, 5.0, 1.0, key="rent_age")
+            size = st.number_input("Size (square metres)", 1.0, 5000.0, 90.0, 1.0, key="rent_size")
+            beds = st.number_input("Bedrooms", 0.0, 20.0, 2.0, 1.0, key="rent_beds")
+            baths = st.number_input("Bathrooms", 0.0, 20.0, 2.0, 1.0, key="rent_baths")
+            cbd = st.number_input("Distance to the city centre (km)", 0.0, 200.0, 6.0, 0.5,
+                                  key="rent_cbd")
+        with right:
+            service = st.number_input("Service charge (KES per month)", 0.0, 10_000_000.0, 8000.0,
+                                      500.0, key="rent_service")
+            garage = optional_number("Garage size (square metres), leave empty if none",
+                                     "rent_garage", 0, 1000)
+            prop_type = st.selectbox("Property type", ms.PROPERTY_TYPES, key="rent_type")
+            area = st.selectbox("Neighbourhood", ms.NEIGHBORHOODS, index=1, key="rent_area")
+            furnish = st.selectbox("Furnishing", ms.FURNISHING_STATUSES, index=1, key="rent_furnish")
+        rent_submit = st.form_submit_button("Predict rent", type="primary")
 
-    regression_pipeline = joblib.load(
-        os.path.join(MODEL_DIR, "lasso_regressor_for_sme_revenue.joblib")
-    )
-
-    classification_pipeline = joblib.load(
-        os.path.join(MODEL_DIR, "svc_classifier_for_sme_credit_risk.joblib")
-    )
-
-    clustering_artifact = joblib.load(
-        os.path.join(MODEL_DIR, "kmeans_mall_customer_segmentation.joblib")
-    )
-
-    arm_artifact = joblib.load(
-        os.path.join(MODEL_DIR, "apriori_recommendation_rules.joblib")
-    )
-    return regression_pipeline, classification_pipeline, clustering_artifact, arm_artifact
-
-regression_pipeline, classification_pipeline, clustering_artifact, arm_artifact = load_artifacts()
-clustering_scaler = clustering_artifact["scaler"]
-clustering_kmeans = clustering_artifact["kmeans"]
-recommendation_lookup = arm_artifact["recommendation_lookup"]
-sku_lookup = arm_artifact["sku_lookup"]
-
-st.set_page_config(page_title="BBT 4206 Model Validation Demos", page_icon="\U0001F4CA", layout="centered")
-st.title("BBT 4206 -- Model Validation Demos")
-
-tab_regression, tab_classification, tab_clustering, tab_arm = st.tabs([
-    "SME Revenue Regressor", "SME Credit Risk Classifier",
-    "Mall Customer Segmenter", "E-commerce Recommender",
-])
+    if rent_submit:
+        try:
+            result = ms.predict_rental_price({
+                "property_age_years": age, "size_sqm": size, "num_bedrooms": beds,
+                "num_bathrooms": baths, "distance_to_cbd_km": cbd,
+                "service_charge_kes": service, "garage_size_sqm": garage,
+                "property_type": prop_type, "neighborhood": area, "furnishing_status": furnish,
+            })
+            st.metric("Predicted rent per month",
+                      f"KES {result['predicted_rental_price_kes']:,.0f}")
+            st.caption(f"Model: {result['model']}")
+        except ms.InputError as error:
+            st.error(f"Check your input: {error}")
 
 # -----------------------------------------------------------------------
-# 1. Regression
+# 2. Classification: employee attrition
 # -----------------------------------------------------------------------
-with tab_regression:
-    with st.form("regression_form"):
-        sector = st.text_input("Sector", "Technology")
-        county = st.text_input("County", "Nairobi")
-        quarter = st.text_input("Quarter", "Q3")
-        business_age_years = st.number_input("Business Age (years)", value=4.5)
-        num_employees = st.number_input("Number of Employees", value=12)
-        # These four categories are the exact set the pipeline's
-        # OrdinalEncoder was fitted on.
-        owner_education_level = st.selectbox(
-            "Owner Education Level",
-            ["Primary", "Secondary", "Tertiary", "Postgraduate"], index=1)
-        monthly_marketing_spend_kes = st.number_input("Monthly Marketing Spend (KES)", value=45000)
-        avg_daily_foot_traffic = st.number_input(
-            "Avg Daily Foot Traffic (leave 0 if not applicable)", value=0)
-        online_presence_score = st.number_input("Online Presence Score", value=78.0)
-        loan_amount_kes = st.number_input("Loan Amount (KES)", value=250000)
-        interest_rate_pct = st.number_input("Interest Rate (%)", value=14.5)
-        inflation_rate_pct = st.number_input("Inflation Rate (%)", value=6.5)
-        competitor_density = st.number_input("Competitor Density", value=5)
-        customer_satisfaction_score = st.number_input("Customer Satisfaction Score", value=4.2)
-        submitted = st.form_submit_button("Predict Revenue")
+with tab_attrition:
+    with st.form("attrition_form"):
+        left, right = st.columns(2)
+        with left:
+            dept = st.selectbox("Department", ms.DEPARTMENTS, index=4, key="att_dept")
+            level = st.selectbox("Job level", ms.JOB_ROLE_LEVELS, index=1, key="att_level")
+            edu = st.selectbox("Education", ms.EDUCATION_LEVELS, index=1, key="att_edu")
+            perf = st.selectbox("Performance rating", ms.PERFORMANCE_RATINGS, index=1, key="att_perf")
+            years = st.number_input("Years at the company", 0.0, 60.0, 3.0, 1.0, key="att_years")
+            promo = st.number_input("Years since last promotion", 0.0, 60.0, 2.0, 1.0, key="att_promo")
+            salary = st.number_input("Monthly salary (KES)", 0.0, 10_000_000.0, 85000.0, 1000.0,
+                                     key="att_salary")
+        with right:
+            overtime = st.number_input("Overtime hours per month", 0.0, 300.0, 20.0, 1.0,
+                                       key="att_overtime")
+            satisfaction = st.number_input("Job satisfaction (1 to 5)", 1.0, 5.0, 3.0, 0.5, key="att_sat")
+            balance = st.number_input("Work-life balance (1 to 5)", 1.0, 5.0, 3.0, 0.5, key="att_wlb")
+            distance = st.number_input("Distance from home (km)", 0.0, 500.0, 12.0, 1.0, key="att_dist")
+            previous = st.number_input("Companies worked for before", 0.0, 30.0, 2.0, 1.0,
+                                       key="att_prev")
+            remote = st.number_input("Remote work days per week", 0.0, 7.0, 1.0, 1.0, key="att_remote")
+            bonus = optional_number("Bonus (KES), leave empty if none", "att_bonus", 0, 100_000_000)
+        attrition_submit = st.form_submit_button("Predict attrition", type="primary")
 
-    if submitted:
-        payload = {
-            "sector": sector, "county": county, "quarter": quarter,
-            "business_age_years": business_age_years, "num_employees": num_employees,
-            "owner_education_level": owner_education_level,
-            "monthly_marketing_spend_kes": monthly_marketing_spend_kes,
-            "avg_daily_foot_traffic": avg_daily_foot_traffic or None,
-            "online_presence_score": online_presence_score,
-            "loan_amount_kes": loan_amount_kes, "interest_rate_pct": interest_rate_pct,
-            "inflation_rate_pct": inflation_rate_pct,
-            "competitor_density": competitor_density,
-            "customer_satisfaction_score": customer_satisfaction_score,
-        }
-        input_row = pd.DataFrame([payload])
-        predicted_log_revenue = regression_pipeline.predict(input_row)[0]
-        predicted_revenue_kes = float(np.expm1(predicted_log_revenue))
-        st.success(f"Predicted monthly revenue: KES {predicted_revenue_kes:,.2f}")
-
-# -----------------------------------------------------------------------
-# 2. Classification
-# -----------------------------------------------------------------------
-with tab_classification:
-    with st.form("classification_form"):
-        sector2 = st.text_input("Sector", "Retail")
-        county2 = st.text_input("County", "Nairobi")
-        quarter2 = st.text_input("Quarter", "Q2")
-        loan_purpose = st.text_input("Loan Purpose", "Working Capital")
-        owner_education_level2 = st.selectbox(
-            "Owner Education Level",
-            ["Primary", "Secondary", "Tertiary", "Postgraduate"], index=1, key="oel2")
-        business_age_years2 = st.number_input("Business Age (years)", value=2.1, key="bay2")
-        num_employees2 = st.number_input("Number of Employees", value=4, key="ne2")
-        monthly_revenue_kes = st.number_input("Monthly Revenue (KES)", value=850000)
-        loan_amount_kes2 = st.number_input("Loan Amount (KES)", value=150000, key="lak2")
-        loan_term_months = st.number_input("Loan Term (months)", value=12)
-        interest_rate_pct2 = st.number_input("Interest Rate (%)", value=16.5, key="irp2")
-        collateral_value_kes = st.number_input("Collateral Value (leave 0 if unsecured)", value=0)
-        debt_to_income_ratio = st.number_input("Debt-to-Income Ratio", value=0.62)
-        credit_score = st.number_input("Credit Score", value=590)
-        num_previous_loans = st.number_input("Number of Previous Loans", value=1)
-        missed_payments_count = st.number_input("Missed Payments Count", value=3)
-        online_presence_score2 = st.number_input("Online Presence Score", value=40.0, key="ops2")
-        customer_satisfaction_score2 = st.number_input(
-            "Customer Satisfaction Score", value=3.4, key="css2")
-        competitor_density2 = st.number_input("Competitor Density", value=6, key="cd2")
-        submitted2 = st.form_submit_button("Predict Credit Risk")
-
-    if submitted2:
-        payload = {
-            "sector": sector2, "county": county2, "quarter": quarter2,
-            "loan_purpose": loan_purpose, "owner_education_level": owner_education_level2,
-            "business_age_years": business_age_years2, "num_employees": num_employees2,
-            "monthly_revenue_kes": monthly_revenue_kes, "loan_amount_kes": loan_amount_kes2,
-            "loan_term_months": loan_term_months, "interest_rate_pct": interest_rate_pct2,
-            "collateral_value_kes": collateral_value_kes or None,
-            "debt_to_income_ratio": debt_to_income_ratio, "credit_score": credit_score,
-            "num_previous_loans": num_previous_loans,
-            "missed_payments_count": missed_payments_count,
-            "online_presence_score": online_presence_score2,
-            "customer_satisfaction_score": customer_satisfaction_score2,
-            "competitor_density": competitor_density2,
-        }
-        input_row = pd.DataFrame([payload])
-        predicted_class = classification_pipeline.predict(input_row)[0]
-        predicted_probabilities = classification_pipeline.predict_proba(input_row)[0]
-        class_labels = classification_pipeline.named_steps["model"].classes_
-        st.success(f"Predicted credit risk category: {predicted_class}")
-        st.write({str(label): round(float(prob), 4)
-                  for label, prob in zip(class_labels, predicted_probabilities)})
+    if attrition_submit:
+        try:
+            result = ms.predict_attrition({
+                "department": dept, "job_role_level": level, "education_level": edu,
+                "performance_rating": perf, "years_at_company": years,
+                "years_since_last_promotion": promo, "monthly_salary_kes": salary,
+                "overtime_hours_per_month": overtime, "job_satisfaction_score": satisfaction,
+                "work_life_balance_score": balance, "distance_from_home_km": distance,
+                "num_companies_worked_previously": previous,
+                "remote_work_days_per_week": remote, "bonus_amount_kes": bonus,
+            })
+            st.metric("Likely to leave the company", result["predicted_attrition"])
+            st.progress(result["probability_of_leaving"],
+                        text=f"Probability of leaving: {result['probability_of_leaving']:.1%}")
+            st.caption(f"Model: {result['model']}")
+        except ms.InputError as error:
+            st.error(f"Check your input: {error}")
 
 # -----------------------------------------------------------------------
-# 3. Clustering
+# 3. Clustering: store segment
 # -----------------------------------------------------------------------
-with tab_clustering:
-    with st.form("clustering_form"):
-        age = st.number_input("Age", min_value=1, max_value=100, value=27)
-        annual_income_k = st.number_input("Annual Income (k$)", min_value=0.0, value=45.0)
-        spending_score = st.number_input("Spending Score (1-100)", min_value=1, max_value=100, value=72)
-        submitted3 = st.form_submit_button("Predict Segment")
+with tab_store:
+    with st.form("store_form"):
+        revenue = st.number_input("Monthly revenue (KES)", 0.0, 1_000_000_000.0, 1_200_000.0,
+                                  10_000.0, key="store_revenue")
+        traffic = st.number_input("Daily foot traffic (shoppers)", 0.0, 1_000_000_000.0, 400.0,
+                                  10.0, key="store_traffic")
+        basket = st.number_input("Average basket size (KES)", 0.0, 1_000_000_000.0, 120.0, 5.0,
+                                 key="store_basket")
+        per_sqm = st.number_input("Revenue per square metre (KES)", 0.0, 1_000_000_000.0, 5000.0,
+                                  100.0, key="store_sqm")
+        per_staff = st.number_input("Revenue per staff member (KES)", 0.0, 1_000_000_000.0,
+                                    140_000.0, 1000.0, key="store_staff")
+        store_submit = st.form_submit_button("Find the segment", type="primary")
 
-    if submitted3:
-        input_row = pd.DataFrame([{
-            "Age": age,
-            "Annual Income (k$)": annual_income_k,
-            "Spending Score (1-100)": spending_score,
-        }])
-        scaled_input = clustering_scaler.transform(input_row)
-        cluster = int(clustering_kmeans.predict(scaled_input)[0])
-        st.success(f"Assigned segment: Cluster {cluster}")
+    if store_submit:
+        try:
+            result = ms.predict_store_segment({
+                "monthly_revenue_kes": revenue, "daily_foot_traffic": traffic,
+                "avg_basket_size_kes": basket, "revenue_per_sqm": per_sqm,
+                "revenue_per_staff": per_staff,
+            })
+            st.success(f"Cluster {result['assigned_cluster']}: {result['segment_name']}")
+            # A table of all five clusters, with the assigned one marked
+            rows = []
+            for p in ms.cluster_profiles():
+                rows.append({
+                    "Assigned": "yes" if p["cluster"] == result["assigned_cluster"] else "",
+                    "Cluster": p["cluster"], "Name": p["name"],
+                    "Stores": p["stores_in_training_data"],
+                    "Monthly revenue (KES)": round(p["monthly_revenue_kes"]),
+                    "Daily foot traffic": round(p["daily_foot_traffic"]),
+                    "Basket size (KES)": round(p["avg_basket_size_kes"]),
+                })
+            st.caption("Typical store in each cluster (worked out from the K-Means cluster centres)")
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+            st.caption(f"Model: {result['model']}")
+        except ms.InputError as error:
+            st.error(f"Check your input: {error}")
 
 # -----------------------------------------------------------------------
-# 4. Association Rule Mining
+# 4. Association rules: music recommender
 # -----------------------------------------------------------------------
-with tab_arm:
-    with st.form("arm_form"):
-        cart_text = st.text_input("Cart (comma-separated SKUs)", "H06, H07")
-        top_n = st.number_input("Top N Recommendations", min_value=1, value=3)
-        submitted4 = st.form_submit_button("Get Recommendations")
+with tab_music:
+    choices = dict(ms.track_choices())            # label -> track id
+    labels_by_id = {track_id: label for label, track_id in choices.items()}
+    with st.form("music_form"):
+        st.write("Pick the tracks already played in the listening session. "
+                 "Try M09 + M10, or M01 + M03, or M13 + M15.")
+        picked = st.multiselect("Tracks played so far", options=list(choices),
+                                default=[labels_by_id["M09"], labels_by_id["M10"]],
+                                key="music_tracks")
+        top_n = st.slider("How many tracks to recommend", 1, 10, 3, key="music_top")
+        music_submit = st.form_submit_button("Recommend next tracks", type="primary")
 
-    if submitted4:
-        cart = {sku.strip() for sku in cart_text.split(",") if sku.strip()}
-        candidates = {}
-        for antecedent, consequent_list in recommendation_lookup.items():
-            if antecedent.issubset(cart):
-                for sku, confidence, lift in consequent_list:
-                    if sku not in cart:
-                        if sku not in candidates or confidence > candidates[sku][0]:
-                            candidates[sku] = (confidence, lift)
-
-        ranked = sorted(candidates.items(), key=lambda item: item[1][0], reverse=True)[:int(top_n)]
-        if not ranked:
-            st.warning("No recommendations for this cart -- try a SKU combination seen in the training orders.")
-        else:
-            for sku, (confidence, lift) in ranked:
-                st.write(f"**{sku_lookup.loc[sku, 'product_name']}** ({sku}) "
-                         f"-- confidence {confidence:.1%}, lift {lift:.2f}")
+    if music_submit:
+        try:
+            result = ms.recommend_tracks([choices[label] for label in picked], top_n)
+            if not result["recommendations"]:
+                st.warning("No saved rule matches these tracks. "
+                           "Try a pair that is often played together, such as M09 + M10.")
+            else:
+                table = pd.DataFrame([{
+                    "Track": r["track_id"], "Name": r["item_name"], "Genre": r["category"],
+                    "Confidence": f"{r['confidence']:.1%}", "Lift": r["lift"],
+                } for r in result["recommendations"]])
+                st.subheader("Play next")
+                st.dataframe(table, hide_index=True, width="stretch")
+                st.caption(f"Model: {result['model']}")
+        except ms.InputError as error:
+            st.error(f"Check your input: {error}")

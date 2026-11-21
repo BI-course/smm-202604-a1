@@ -38,11 +38,11 @@
 
 **Member 5:**
 
-| **Details**                                                                                                                           | **Comment** |
-|:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Details**                                                                                                                           | **Comment**  |
+|:--------------------------------------------------------------------------------------------------------------------------------------|:-------------|
+| **Student ID**                                                                                                                        | 169640       |
+| **Name**                                                                                                                              | Brian Kiptoo |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** | I built the web pages, the Streamlit app and the Hugging Face Space. The pages (HTML, CSS and JS in separate files) call the API for all four models, check the input before sending it, and show clear messages for errors or when the API is not running. I deployed the Streamlit app on Streamlit Community Cloud and published the pages as a Hugging Face Static Space that calls the Render API. I learned that a browser page can only call an API on another address when the server allows it (CORS), that a Static Space has no Python so it must call a hosted API, that Streamlit reruns the script on every click so models must be loaded once and cached, and that input mistakes should become readable messages, not crashes. Branch: https://github.com/BI-course/smm-202604-a1/tree/feature/hf-streamlit-frontend             |
 
 ## Chosen Level of Difficulty
 
