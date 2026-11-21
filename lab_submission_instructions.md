@@ -24,9 +24,9 @@
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        |   155858          |
+| **Name**                                                                                                                              | Mvurya Hassan Wanini            |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |   I set up Docker, Gunicorn and Nginx: I added a Dockerfile that runs the API under Gunicorn, created a self-signed HTTPS certificate, and ran two copies of the API behind an Nginx reverse proxy that redirects http to https and forwards /api/ requests to Flask. I tested it through https://localhost/api and checked the Gunicorn log and docker compose ps (two API containers plus Nginx). I learned that Gunicorn is the production server while Flask's built-in server is for development only, that a Docker image bundles the code, models and exact library versions so it runs the same everywhere, and that a reverse proxy gives one secure public entry point and can share requests across several containers. Branch: https://github.com/BI-course/smm-202604-a1/tree/feature/docker-nginx-setup          |
 
 **Member 4:**
 
