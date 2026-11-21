@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rental price | Group A model demos</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="t-rent">
+  <header class="site-header">
+    <a class="brand" href="index.html">Group A model demos</a>
+    <nav class="site-nav" aria-label="Pages">
+      <a href="index.html">Home</a>
+      <a href="rental.html" aria-current="page">Rental price</a>
+      <a href="attrition.html">Employee attrition</a>
+      <a href="store.html">Store segment</a>
+      <a href="music.html">Music recommender</a>
+    </nav>
+    <span id="api-status" class="api-status" role="status">Checking the API...</span>
+  </header>
+  <main>
+    <h1>Rental price</h1>
+    <p class="lead">Describe a property in Nairobi and the regression model estimates its monthly rent.</p>
+    <div class="layout">
+      <form id="model-form" novalidate>
+      <fieldset>
+        <legend>The property</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="size_sqm">Size (square metres)</label>
+          <input type="number" id="size_sqm" name="size_sqm" min="1" max="5000" step="any" value="90">
+        </div>
+        <div class="field">
+          <label for="num_bedrooms">Bedrooms</label>
+          <input type="number" id="num_bedrooms" name="num_bedrooms" min="0" max="20" step="1" value="2">
+        </div>
+        <div class="field">
+          <label for="num_bathrooms">Bathrooms</label>
+          <input type="number" id="num_bathrooms" name="num_bathrooms" min="0" max="20" step="1" value="2">
+        </div>
+        <div class="field">
+          <label for="property_age_years">Property age (years)</label>
+          <input type="number" id="property_age_years" name="property_age_years" min="0" max="150" step="any" value="5">
+        </div>
+        <div class="field">
+          <label for="garage_size_sqm">Garage size (square metres)</label>
+          <input type="number" id="garage_size_sqm" name="garage_size_sqm" min="0" max="1000" step="any" value="" data-optional="true">
+          <span class="hint">Leave empty if there is no garage.</span>
+        </div>
+        <div class="field">
+          <label for="property_type">Property type</label>
+          <select id="property_type" name="property_type">
+            <option selected>Apartment</option>
+            <option>Bungalow</option>
+            <option>Maisonette</option>
+            <option>Studio</option>
+            <option>Townhouse</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="furnishing_status">Furnishing</label>
+          <select id="furnishing_status" name="furnishing_status">
+            <option>Unfurnished</option>
+            <option selected>Semi-Furnished</option>
+            <option>Fully Furnished</option>
+          </select>
+        </div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Location and costs</legend>
+        <div class="fields">
+        <div class="field">
+          <label for="neighborhood">Neighbourhood</label>
+          <select id="neighborhood" name="neighborhood">
+            <option>Karen</option>
+            <option selected>Kilimani</option>
+            <option>Ngong Road</option>
+            <option>Ruaka</option>
+            <option>South B</option>
+            <option>Westlands</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="distance_to_cbd_km">Distance to city centre (km)</label>
+          <input type="number" id="distance_to_cbd_km" name="distance_to_cbd_km" min="0" max="200" step="any" value="6">
+        </div>
+        <div class="field">
+          <label for="service_charge_kes">Service charge (KES per month)</label>
+          <input type="number" id="service_charge_kes" name="service_charge_kes" min="0" max="10000000" step="any" value="8000">
+        </div>
+        </div>
+      </fieldset>
+      <div class="actions">
+          <button type="submit">Predict rent</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+      <section class="result-panel" id="result-panel" aria-live="polite" aria-label="Result">
+        <p class="result-empty">Your answer will appear here.</p>
+      </section>
+    </div>
+  </main>
+  <script src="js/common.js"></script>
+  <script src="js/rental.js"></script>
+</body>
+</html>

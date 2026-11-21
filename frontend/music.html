@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music recommender | Group A model demos</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="t-music">
+  <header class="site-header">
+    <a class="brand" href="index.html">Group A model demos</a>
+    <nav class="site-nav" aria-label="Pages">
+      <a href="index.html">Home</a>
+      <a href="rental.html">Rental price</a>
+      <a href="attrition.html">Employee attrition</a>
+      <a href="store.html">Store segment</a>
+      <a href="music.html" aria-current="page">Music recommender</a>
+    </nav>
+    <span id="api-status" class="api-status" role="status">Checking the API...</span>
+  </header>
+  <main>
+    <h1>Music recommender</h1>
+    <p class="lead">Tick the tracks already played in a listening session. The association rules suggest what to play next.</p>
+    <div class="layout">
+      <form id="model-form" novalidate>
+        <fieldset>
+          <legend>Tracks played so far</legend>
+          <p class="hint" style="margin-bottom:8px">Try an example:</p>
+          <div class="examples" id="examples"></div>
+          <div id="track-list"></div>
+          <div id="track-error"></div>
+        </fieldset>
+        <fieldset>
+          <legend>How many suggestions?</legend>
+          <div class="fields">
+            <div class="field">
+              <label for="top_n">Number of tracks (1 to 10)</label>
+              <input type="number" id="top_n" name="top_n" min="1" max="10" step="1" value="3">
+            </div>
+          </div>
+        </fieldset>
+        <div class="actions">
+          <button type="submit">Recommend next tracks</button>
+          <button type="reset">Reset</button>
+        </div>
+      </form>
+      <section class="result-panel" id="result-panel" aria-live="polite" aria-label="Result">
+        <p class="result-empty">Your answer will appear here.</p>
+      </section>
+    </div>
+  </main>
+  <script src="js/common.js"></script>
+  <script src="js/music.js"></script>
+</body>
+</html>
