@@ -1,11 +1,10 @@
-gradio
-requests
-numpy
-pandas
-joblib==1.6.0
-scikit-learn==1.9.0
+# Packages for the Hugging Face Space.
+# Do NOT add gradio or spaces here: Hugging Face installs them itself, using the
+# sdk_version written in README.md.
+# scikit-learn is pinned to 1.6.1 because our models were saved with that version.
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+joblib==1.5.2
+scikit-learn==1.6.1
 imbalanced-learn==0.14.2
-imblearn
-mlxtend==0.25.0
-flask
-flask-cors
